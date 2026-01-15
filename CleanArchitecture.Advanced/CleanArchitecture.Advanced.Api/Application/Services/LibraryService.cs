@@ -56,25 +56,49 @@ namespace CleanArchitecture.Advanced.Api.Application.Services
 
         public async Task<LibraryDTO> GetLibraryByIdAsync(long libraryId)
         {
-            var entity = await _libraryRepository.GetByIdAsync(libraryId);
-            return _mapper.Map<LibraryDTO>(entity);
+            try
+            {
+                var entity = await _libraryRepository.GetByIdAsync(libraryId);
+                return _mapper.Map<LibraryDTO>(entity);
+            }
+            catch (InvalidOperationException)
+            {
+                // Return null when entity is not found (for 404 handling in controller)
+                return null!;
+            }
         }
 
         public async Task<LibraryDTO> FirstLibraryAsync()
         {
-            var entity = await _libraryRepository.FirstEntityAsync();
-            return _mapper.Map<LibraryDTO>(entity);
+            try
+            {
+                var entity = await _libraryRepository.FirstEntityAsync();
+                return _mapper.Map<LibraryDTO>(entity);
+            }
+            catch (InvalidOperationException)
+            {
+                // Return null when entity is not found (for 404 handling in controller)
+                return null!;
+            }
         }
 
         public async Task<LibraryDTO> FirstLibraryAsync(FirstEntityRequest firstEntityRequest)
         {
-            // Build FirstEntity expression
-            Expression<Func<Library, bool>> expression = library =>
-                                                         library.Name == firstEntityRequest.Name &&
-                                                         library.Address == firstEntityRequest.Address;
+            try
+            {
+                // Build FirstEntity expression
+                Expression<Func<Library, bool>> expression = library =>
+                                                             library.Name == firstEntityRequest.Name &&
+                                                             library.Address == firstEntityRequest.Address;
 
-            var entity = await _libraryRepository.FirstEntityAsync(expression);
-            return _mapper.Map<LibraryDTO>(entity);
+                var entity = await _libraryRepository.FirstEntityAsync(expression);
+                return _mapper.Map<LibraryDTO>(entity);
+            }
+            catch (InvalidOperationException)
+            {
+                // Return null when entity is not found (for 404 handling in controller)
+                return null!;
+            }
         }
 
         public async Task<IEnumerable<string>> SelectLibrariesNamesAsync()
@@ -147,31 +171,34 @@ namespace CleanArchitecture.Advanced.Api.Application.Services
 
         public async Task<bool> DeleteLibraryAsync(long libraryId)
         {
-            var library = await _libraryRepository.GetByIdAsync(libraryId);
-
-            if (library is null)
+            try
             {
-                throw new InvalidOperationException($"Library with ID {libraryId} not found.");
+                var library = await _libraryRepository.GetByIdAsync(libraryId);
+
+                await _libraryRepository.DeleteAsync(libraryId);
+
+                var eventLog = new EventLog
+                {
+                    EventType = "Library-Delete",
+                    Description = $"Library {library.Name} has been properly deleted.",
+                };
+
+                await _eventLogRepository.InsertAsync(eventLog);
+
+                // Call CommitChangesAsync on one of the repositories to commit both changes in one transaction
+                await _libraryRepository.CommitChangesAsync();
+
+                // Use external service for notification
+                await _notificationService.SendNotificationAsync($"Library {library.Name} has been properly deleted.");
+
+                // Delete properly executed
+                return true;
             }
-
-            await _libraryRepository.DeleteAsync(libraryId);
-
-            var eventLog = new EventLog
+            catch (InvalidOperationException ex)
             {
-                EventType = "Library-Delete",
-                Description = $"Library {library.Name} has been properly deleted.",
-            };
-
-            await _eventLogRepository.InsertAsync(eventLog);
-
-            // Call CommitChangesAsync on one of the repositories to commit both changes in one transaction
-            await _libraryRepository.CommitChangesAsync();
-
-            // Use external service for notification
-            await _notificationService.SendNotificationAsync($"Library {library.Name} has been properly deleted.");
-
-            // Delete properly executed
-            return true;
+                // Re-throw with more context when entity not found
+                throw new InvalidOperationException($"Library with ID {libraryId} not found.", ex);
+            }
         }
     }
 }

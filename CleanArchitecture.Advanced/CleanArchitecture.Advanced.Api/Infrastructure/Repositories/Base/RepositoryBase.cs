@@ -42,6 +42,10 @@ namespace CleanArchitecture.Advanced.Api.Infrastructure.Repositories.Base
             return await _cache.GetSetItemsCacheAsync<TEntity>(async () => await table.Where(predicate).AsNoTracking().ToListAsync(), key);
         }
 
+        /// <summary>
+        /// Gets an entity by ID without tracking. Returns cached result if available.
+        /// This method uses AsNoTracking for read-only scenarios.
+        /// </summary>
         public virtual async Task<TEntity> GetByIdAsync(long id)
         {
             var table = GetTable();
@@ -76,19 +80,27 @@ namespace CleanArchitecture.Advanced.Api.Infrastructure.Repositories.Base
             return await _cache.GetSetItemsCacheAsync<TField>(async () => await table.Select(expression).AsNoTracking().ToListAsync(), key);
         }
 
+        /// <summary>
+        /// Inserts a new entity. Invalidates relevant cache entries.
+        /// </summary>
         public virtual async Task InsertAsync(TEntity entity)
         {
             // Invalidate cache since an item is added
             _cache.RemoveCacheBykey(KeyCacheAll);
 
-            entity.CreationDate = DateTime.UtcNow.ToLocalTime();
+            entity.CreationDate = DateTime.UtcNow;
             entity.CreationUser = CommonConstants.CreationUsername;
 
             await _context.Set<TEntity>().AddAsync(entity);
         }
 
+        /// <summary>
+        /// Updates an entity. This method uses FindAsync to track the entity for EF Core change tracking.
+        /// Invalidates relevant cache entries.
+        /// </summary>
         public virtual async Task UpdateAsync(TEntity entity)
         {
+            // Use FindAsync to get tracked entity for updates
             var existingEntity = await _context.Set<TEntity>().FindAsync(entity.Id);
 
             if (existingEntity is null)
@@ -98,22 +110,30 @@ namespace CleanArchitecture.Advanced.Api.Infrastructure.Repositories.Base
 
             // Invalidate cache since an item is updated
             _cache.RemoveCacheBykey(KeyCacheAll);
+            _cache.RemoveCacheBykey(KeyCachePrefix + entity.Id);
 
-            entity.ModificationDate = DateTime.UtcNow.ToLocalTime();
+            entity.ModificationDate = DateTime.UtcNow;
             entity.ModificationUser = CommonConstants.ModificationUsername;
 
             // Set only updated values to the existing entity
             _context.Entry(existingEntity).CurrentValues.SetValues(entity);
         }
 
+        /// <summary>
+        /// Deletes an entity by ID. Invalidates relevant cache entries.
+        /// Uses GetByIdAsync (no tracking) to verify existence, then removes the entity.
+        /// </summary>
         public virtual async Task DeleteAsync(long id)
         {
+            // First check if entity exists (uses no-tracking query)
             var entity = await GetByIdAsync(id);
             if (entity is not null)
             {
                 // Invalidate cache since an item is deleted
                 _cache.RemoveCacheBykey(KeyCacheAll);
+                _cache.RemoveCacheBykey(KeyCachePrefix + id);
 
+                // Attach and mark as deleted (EF Core will track this for deletion)
                 _context.Set<TEntity>().Remove(entity);
             }
         }

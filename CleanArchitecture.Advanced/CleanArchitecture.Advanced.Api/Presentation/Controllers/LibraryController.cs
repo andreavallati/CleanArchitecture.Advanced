@@ -81,24 +81,27 @@ namespace CleanArchitecture.Advanced.Api.Presentation.Controllers
         }
 
         [HttpPost]
-        public async Task<ActionResult<bool>> InsertLibraryAsync([FromBody] LibraryDTO library)
+        public async Task<ActionResult<LibraryDTO>> InsertLibraryAsync([FromBody] LibraryDTO library)
         {
-            var success = await _libraryService.InsertLibraryAsync(library);
-            return Ok(success);
+            await _libraryService.InsertLibraryAsync(library);
+            // Return 201 Created with location header pointing to the new resource
+            return CreatedAtAction(nameof(GetLibraryByIdAsync), new { libraryId = library.Id }, library);
         }
 
         [HttpPut]
-        public async Task<ActionResult<bool>> UpdateLibraryAsync([FromBody] LibraryDTO library)
+        public async Task<ActionResult> UpdateLibraryAsync([FromBody] LibraryDTO library)
         {
-            var success = await _libraryService.UpdateLibraryAsync(library);
-            return Ok(success);
+            await _libraryService.UpdateLibraryAsync(library);
+            // Return 204 No Content for successful updates (REST convention)
+            return NoContent();
         }
 
         [HttpDelete("{libraryId:long}")]
-        public async Task<ActionResult<bool>> DeleteLibraryAsync(long libraryId)
+        public async Task<ActionResult> DeleteLibraryAsync(long libraryId)
         {
-            var success = await _libraryService.DeleteLibraryAsync(libraryId);
-            return Ok(success);
+            await _libraryService.DeleteLibraryAsync(libraryId);
+            // Return 204 No Content for successful deletions (REST convention)
+            return NoContent();
         }
     }
 }

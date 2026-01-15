@@ -7,7 +7,7 @@ namespace CleanArchitecture.Advanced.Api.Domain.Entities.Base
     {
         [Key]
         public long Id { get; set; }
-        public DateTime? CreationDate { get; set; } = DateTime.UtcNow.ToLocalTime();
+        public DateTime? CreationDate { get; set; } = DateTime.UtcNow;
         public string CreationUser { get; set; } = CommonConstants.CreationUsername;
         public DateTime? ModificationDate { get; set; }
         public string? ModificationUser { get; set; }
